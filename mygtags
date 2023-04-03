@@ -1,0 +1,124 @@
+#!/usr/bin/perl
+
+use 5.010;
+use strict;
+use warnings;
+use Getopt::Long;
+use File::Find;
+
+my $showHelp=0;
+my $listEntry=0;
+my @addEntrys=();
+my @delEntrys=();
+my $updateGtagsDB=0;
+my @entrys=();
+my $mygtagsListFile="mygtags_list";
+my $gtagsListFile="gtags.files";
+my $gtagsListFileExt=qr/(\.c|\.cpp|\.h)$/;
+my $gtagsCmd="gtags";
+my @gtagsListFileEntrys=();
+
+sub listEntry {
+	my $entryCnt = @entrys;
+	printf("directories entrys count: %d\r\n", $entryCnt);
+
+	foreach my $entry (@entrys) {
+		printf("  %s\r\n", $entry);
+	}
+}
+
+sub loadEntry {
+	if ( open(FH, "<".$mygtagsListFile) ) {
+		foreach my $line (<FH>) {
+			chomp($line);	
+			push(@entrys, $line);
+		}
+		close(FH);
+	} 
+}
+
+sub saveEntry {
+	if ( open(FH, ">".$mygtagsListFile) ) {
+		foreach my $entry (@entrys) {
+			printf FH ("%s\n", $entry);
+		}
+		close(FH);
+	} 
+}
+
+sub generateGtagsFilesHelper {
+	if ( /$gtagsListFileExt/ ) {
+		push(@gtagsListFileEntrys, $File::Find::name);
+	}
+}
+
+sub generateGtagsFiles {
+	find(\&generateGtagsFilesHelper, @entrys);
+
+	if ( open(FH, ">".$gtagsListFile) ) {
+		printf FH ("%s\n", $_) foreach @gtagsListFileEntrys;
+		close(FH);
+	} 
+}
+
+sub generateGtagsDB {
+	system($gtagsCmd);
+}
+
+sub usage {
+        say "Usage: $0 --list | --add <dir1> --add <dir2> ... | --del <dir1> --del <dir2> ... | --update";
+        say "   --list(-l)   : list all existing directories entrys.";
+        say "   --add(-a)    : add directory entry";
+	say "   --del(-d)    : del directory entry";
+	say "   --update(-u) : update gtags database files";
+        say "   --help(-h)   : Display help info";
+        exit 1;
+}
+
+GetOptions(
+        'list|l'    => \$listEntry, 
+	'add|a=s'   => \@addEntrys,
+	'del|d=s'   => \@delEntrys,
+        'update|u'  => \$updateGtagsDB, 
+        'help|h'    => \$showHelp, 
+);
+
+if ( $showHelp ) {
+	usage();
+}
+
+loadEntry();
+
+if ( $listEntry ) {
+	listEntry();
+	exit 0;
+}
+
+if ( @addEntrys ) {
+	foreach my $entry (@addEntrys) {
+		chomp($entry);	
+		push(@entrys, $entry);
+	}
+	saveEntry();
+	generateGtagsFiles();
+	generateGtagsDB();
+	exit 0;
+}
+
+if ( @delEntrys ) {
+	foreach my $entry (@delEntrys) {
+		chomp($entry);	
+		@entrys = grep {!/$entry/} @entrys;
+	}
+	saveEntry();
+	generateGtagsFiles();
+	generateGtagsDB();
+	exit 0;
+}
+
+if ($updateGtagsDB) {
+	generateGtagsDB();
+	exit 0;
+}
+
+usage();
